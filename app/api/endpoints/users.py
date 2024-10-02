@@ -1,9 +1,10 @@
-from fastapi import APIRouter, status, Depends, Request
+from fastapi import APIRouter, status, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.auth.responses import UserResponse
+from app.api.auth.responses import UserResponse, UserWithOrdersResponse
 from app.api.auth.schemas import CreateUserRequest
+from app.api.models.models import User, Order
 from app.api.services.user_service import (
     create_user_account,
 )
@@ -56,3 +57,35 @@ async def get_user_detail(
 
     # Return user details
     return request.user
+
+
+# Sample endpoint for taking arbitrary number of query params
+@users_router.get("/queries")
+async def get_queries_from_path(request: Request):
+    return JSONResponse(
+        content=dict(request.query_params), status_code=status.HTTP_200_OK
+    )
+
+
+# Sample endpoint for taking path params and arbitrary number of query params
+@users_router.get("/path-params/{name}/{age}")
+async def get_queries_from_path(request: Request, name: str, age: int):
+    query_params = dict(request.query_params)
+    return JSONResponse(
+        content={"name": name, "age": age, "query_params": query_params},
+        status_code=status.HTTP_200_OK,
+    )
+
+
+# Endpoint to fetch user with their orders using a JOIN
+@users_router.get("/users-with-orders/{user_id}", response_model=UserWithOrdersResponse)
+def get_user_with_orders(user_id: int, db: Session = Depends(get_db)):
+    # Perform a JOIN to get the user and their orders
+    stmt = db.query(User).join(Order).filter(User.id == user_id).all()
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user
